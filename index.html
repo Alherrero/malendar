@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Malendar</title>
+    <link rel="icon" href="data:image/svg+xml,
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
+  <text y='.9em' font-size='90'>📦</text>
+</svg>">
+<meta name="description" content="Malendar es una aplicación web para organizar y gestionar máquinas de hacking de plataformas como Hack The Box, TryHackMe o VulnHub, permitiendo llevar seguimiento, notas y progreso de estudio.">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Rajdhani:wght@700;900&display=swap"
+        rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        htb: {
+                            dark: '#111927',
+                            darker: '#0a0e1a',
+                            green: '#9fef00',
+                            blue: '#00d4ff',
+                            card: '#1a1f2e',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['JetBrains Mono', 'monospace'],
+                        display: ['Rajdhani', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            zoom: 80%;
+        }
+
+
+        .htb-pattern {
+            background-color: #0a0e1a;
+            background-image:
+                linear-gradient(rgba(159, 239, 0, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(159, 239, 0, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: patternMove 20s linear infinite;
+        }
+
+        @keyframes patternMove {
+            0% {
+                background-position: 0 0;
+            }
+
+            100% {
+                background-position: 50px 50px;
+            }
+        }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #111927;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #9fef00;
+            border-radius: 5px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #b3ff33;
+        }
+
+        /* MACHINE CARDS */
+        .machine-card {
+            background: linear-gradient(145deg, #1a1f2e 0%, #141824 100%);
+            border: 1px solid rgba(159, 239, 0, 0.2);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .machine-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(159, 239, 0, 0.1), transparent);
+            transition: left 0.5s;
+        }
+
+        .machine-card:hover::before {
+            left: 100%;
+        }
+
+        .machine-card:hover {
+            border-color: rgba(159, 239, 0, 0.5);
+            transform: translateY(-4px);
+            box-shadow: 0 10px 30px rgba(159, 239, 0, 0.15);
+        }
+
+        /* ANIMATIONS */
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .machine-card {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        /* INPUT DATE STYLING */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1);
+            opacity: 0.7;
+            cursor: pointer;
+        }
+
+        input[type="date"]::-webkit-calendar-picker-indicator:hover {
+            opacity: 1;
+        }
+
+        /* STAR BUTTONS */
+        .star-btn {
+            filter: grayscale(100%);
+            opacity: 0.3;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .star-btn:hover,
+        .star-btn.active {
+            filter: grayscale(0%);
+            opacity: 1;
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+
+<body class="bg-htb-darker text-slate-200 min-h-screen font-sans">
+
+    <div class="fixed inset-0 htb-pattern -z-10"></div>
+
+    <!-- NAVBAR -->
+    <nav class="sticky top-0 w-full backdrop-blur-sm bg-htb-dark/70 border-b border-htb-green/10 z-50">
+        <div class="w-full px-6 py-3 flex items-center justify-between">
+            <div class="flex items-center gap-2">
+                <span class="text-lg">📦</span>
+                <span class="font-display font-black text-lg tracking-tight text-htb-green uppercase">Malendar</span>
+            </div>
+            <div class="flex items-center gap-6">
+                <div id="stats" class="text-[10px] font-bold text-slate-500 flex gap-4">
+                    <span>📊 <span id="total-machines">0</span></span>
+                    <span>✅ <span id="pwned-machines">0</span></span>
+                    <span>⏳ <span id="pending-machines">0</span></span>
+                </div>
+                <button onclick="openSettingsModal()"
+                    class="text-slate-500 hover:text-htb-green transition-colors text-xl" title="Configuración">
+                    🔧 Configuración
+                </button>
+            </div>
+        </div>
+    </nav>
+
+    <!-- MAIN -->
+    <main class="w-full px-6 pt-6 pb-12">
+
+        <!-- BOTÓN DISCRETO PARA AÑADIR MÁQUINA -->
+        <div class="mb-6">
+            <button onclick="openAddMachineModal()"
+                class="w-full bg-htb-card/30 hover:bg-htb-card/50 backdrop-blur-sm p-4 rounded-lg border border-htb-green/10 hover:border-htb-green/30 transition-all group">
+                <div class="flex items-center justify-center gap-2 text-slate-400 group-hover:text-htb-green">
+                    <span class="text-lg">➕</span>
+                    <span class="font-bold text-sm uppercase tracking-wider">Nueva Máquina</span>
+                </div>
+            </button>
+        </div>
+
+        <!-- FILTROS -->
+        <div class="mb-6 flex flex-wrap gap-3">
+            <button onclick="filterMachines('all')"
+                class="filter-btn bg-htb-green text-htb-dark border border-htb-green px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all hover:bg-htb-green/90">Todas</button>
+            <button onclick="filterMachines('pwned')"
+                class="filter-btn bg-htb-card/50 border border-htb-green/20 text-htb-green px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all hover:bg-htb-green/10 hover:border-htb-green/40">Pwned</button>
+            <button onclick="filterMachines('in-progress')"
+                class="filter-btn bg-htb-card/50 border border-htb-green/20 text-htb-green px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all hover:bg-htb-green/10 hover:border-htb-green/40">En
+                Progreso</button>
+            <button onclick="filterMachines('pending')"
+                class="filter-btn bg-htb-card/50 border border-htb-green/20 text-htb-green px-4 py-2 rounded-lg text-xs font-bold uppercase transition-all hover:bg-htb-green/10 hover:border-htb-green/40">Pendientes</button>
+            <div class="flex-grow"></div>
+            <input id="search-input" type="text" placeholder="🔍 Buscar máquina..."
+                class="px-4 py-2 bg-htb-card border border-htb-green/20 rounded-lg text-xs outline-none focus:border-htb-green transition-all"
+                onkeyup="searchMachines()">
+        </div>
+
+        <!-- GRID DE MÁQUINAS -->
+        <div id="machines-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <!-- Máquinas se inyectan aquí -->
+        </div>
+
+        <div id="empty-state" class="text-center py-20 hidden">
+            <div class="text-6xl mb-4">🖥️</div>
+            <p class="text-xl font-bold text-slate-400">No hay máquinas todavía</p>
+            <p class="text-sm text-slate-500 mt-2">Añade tu primera máquina</p>
+        </div>
+    </main>
+
+    <!-- MODAL PARA VER/EDITAR MÁQUINA -->
+    <div id="machine-modal"
+        class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 overflow-y-auto">
+        <div
+            class="bg-htb-card border-2 border-htb-green/30 rounded-2xl p-8 max-w-3xl w-full shadow-2xl shadow-htb-green/10 my-8">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 id="modal-title"
+                        class="font-display text-3xl font-black text-htb-green uppercase tracking-tight"></h3>
+                    <div id="modal-platform" class="text-sm text-slate-400 mt-1"></div>
+                </div>
+                <button onclick="closeMachineModal()"
+                    class="text-slate-500 hover:text-htb-green text-2xl transition-colors">✕</button>
+            </div>
+
+            <div class="space-y-6">
+                <!-- Información básica -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="block text-[10px] uppercase tracking-wider text-htb-green font-bold mb-2">Dificultad</label>
+                        <select id="edit-difficulty"
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                            <option value="Easy">🟢 Easy</option>
+                            <option value="Medium">🟡 Medium</option>
+                            <option value="Hard">🔴 Hard</option>
+                            <option value="Insane">⚫ Insane</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-[10px] uppercase tracking-wider text-htb-green font-bold mb-2">Sistema
+                            Operativo</label>
+                        <select id="edit-os"
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                            <option value="Linux">🐧 Linux</option>
+                            <option value="Windows">🪟 Windows</option>
+                            <option value="Otros">🔧 Otros</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="block text-[10px] uppercase tracking-wider text-htb-green font-bold mb-2">Fecha</label>
+                        <input id="edit-date" type="date"
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                    </div>
+                    <div>
+                        <label
+                            class="block text-[10px] uppercase tracking-wider text-htb-green font-bold mb-2">Estado</label>
+                        <select id="edit-status"
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                            <option value="pending">⏳ Pendiente</option>
+                            <option value="in-progress">🔄 En Progreso</option>
+                            <option value="pwned">✅ Pwned</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-[10px] uppercase tracking-wider text-htb-green font-bold mb-2">Descripción
+                        / IP</label>
+                    <input id="edit-description" type="text"
+                        class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                </div>
+
+                <div>
+                    <label class="block text-[10px] uppercase tracking-wider text-htb-green font-bold mb-2">Conceptos /
+                        Tags</label>
+                    <input id="edit-concepts" type="text"
+                        class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                    <p class="text-[9px] text-slate-500 mt-1">Separa los conceptos con comas</p>
+                </div>
+
+                <!-- Opinión -->
+                <div>
+                    <label class="block text-[10px] uppercase tracking-wider text-htb-green font-bold mb-2">Opinión /
+                        Notas</label>
+                    <textarea id="edit-opinion" rows="6"
+                        placeholder="Escribe tu opinión sobre la máquina, técnicas utilizadas, dificultades encontradas..."
+                        class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none resize-none focus:border-htb-green"></textarea>
+                </div>
+            </div>
+
+            <div class="flex gap-3 mt-8">
+                <button onclick="saveMachineEdit()"
+                    class="flex-1 bg-htb-green hover:bg-htb-green/90 text-htb-dark font-black py-3 rounded-lg transition-all uppercase shadow-lg">
+                    Guardar Cambios
+                </button>
+                <button onclick="deleteMachine()"
+                    class="px-6 bg-red-600/20 border border-red-600/50 hover:bg-red-600/30 text-red-500 font-bold py-3 rounded-lg transition-all uppercase">
+                    Eliminar
+                </button>
+                <button onclick="closeMachineModal()"
+                    class="px-6 bg-slate-700/50 hover:bg-slate-700 text-white font-bold py-3 rounded-lg transition-all uppercase">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL PARA AÑADIR NUEVA MÁQUINA -->
+    <div id="add-machine-modal"
+        class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 overflow-y-auto">
+        <div
+            class="bg-htb-card border-2 border-htb-green/30 rounded-2xl p-8 max-w-3xl w-full shadow-2xl shadow-htb-green/10 my-8">
+            <div class="flex justify-between items-start mb-6">
+                <h3 class="font-display text-3xl font-black text-htb-green uppercase tracking-tight">➕ Nueva Máquina
+                </h3>
+                <button onclick="closeAddMachineModal()"
+                    class="text-slate-500 hover:text-htb-green text-2xl transition-colors">✕</button>
+            </div>
+
+            <div class="space-y-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="text-[10px] uppercase tracking-widest text-htb-green font-bold mb-2 block">Nombre</label>
+                        <input id="machine-name" type="text" placeholder="Ej: Lame, Bashed..."
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm focus:border-htb-green outline-none transition-all">
+                    </div>
+                    <div>
+                        <label
+                            class="text-[10px] uppercase tracking-widest text-htb-green font-bold mb-2 block">Plataforma</label>
+                        <select id="machine-platform"
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                            <option value="HackTheBox">HackTheBox</option>
+                            <option value="TryHackMe">TryHackMe</option>
+                            <option value="VulnHub">VulnHub</option>
+                            <option value="Otra">Otra</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label
+                            class="text-[10px] uppercase tracking-widest text-htb-green font-bold mb-2 block">Fecha</label>
+                        <input id="machine-date" type="date"
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm focus:border-htb-green outline-none">
+                    </div>
+                    <div>
+                        <label
+                            class="text-[10px] uppercase tracking-widest text-htb-green font-bold mb-2 block">Dificultad</label>
+                        <select id="machine-difficulty"
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                            <option value="Easy">🟢 Easy</option>
+                            <option value="Medium">🟡 Medium</option>
+                            <option value="Hard">🔴 Hard</option>
+                            <option value="Insane">⚫ Insane</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-[10px] uppercase tracking-widest text-htb-green font-bold mb-2 block">Sistema
+                            Operativo</label>
+                        <select id="machine-os"
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                            <option value="Linux">🐧 Linux</option>
+                            <option value="Windows">🪟 Windows</option>
+                            <option value="Otros">🔧 Otros</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label
+                            class="text-[10px] uppercase tracking-widest text-htb-green font-bold mb-2 block">Estado</label>
+                        <select id="machine-status"
+                            class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm outline-none">
+                            <option value="pending">⏳ Pendiente</option>
+                            <option value="in-progress">🔄 En Progreso</option>
+                            <option value="pwned">✅ Pwned</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-[10px] uppercase tracking-widest text-htb-green font-bold mb-2 block">Descripción
+                        / IP</label>
+                    <input id="machine-description" type="text" placeholder="Breve descripción o IP de la máquina..."
+                        class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm focus:border-htb-green outline-none">
+                </div>
+
+                <div>
+                    <label class="text-[10px] uppercase tracking-widest text-htb-green font-bold mb-2 block">Conceptos /
+                        Tags</label>
+                    <input id="machine-concepts" type="text" placeholder="Ej: SQLi, LFI, Buffer Overflow, SUID..."
+                        class="w-full bg-htb-dark border border-htb-green/30 p-3 rounded-lg text-sm focus:border-htb-green outline-none">
+                    <p class="text-[9px] text-slate-500 mt-1">Separa los conceptos con comas</p>
+                </div>
+            </div>
+
+            <div class="flex gap-3 mt-8">
+                <button onclick="addMachine()"
+                    class="flex-1 bg-htb-green hover:bg-htb-green/90 text-htb-dark font-black py-3 rounded-lg transition-all uppercase shadow-lg shadow-htb-green/20 hover:shadow-htb-green/40">
+                    Añadir Máquina
+                </button>
+                <button onclick="closeAddMachineModal()"
+                    class="px-6 bg-slate-700/50 hover:bg-slate-700 text-white font-bold py-3 rounded-lg transition-all uppercase">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE CONFIGURACIÓN -->
+    <div id="settings-modal"
+        class="fixed inset-0 bg-black/90 backdrop-blur-sm z-[100] hidden items-center justify-center p-4 overflow-y-auto">
+        <div
+            class="bg-htb-card border-2 border-htb-green/30 rounded-2xl p-8 max-w-2xl w-full shadow-2xl shadow-htb-green/10 my-8">
+            <div class="flex justify-between items-start mb-6">
+                <div>
+                    <h3 class="font-display text-3xl font-black text-htb-green uppercase tracking-tight">🔧
+                        Configuración</h3>
+                    <p class="text-sm text-slate-400 mt-2">Creado por Alherrero (alherrero.github.io) | v0.1 </p>
+                </div>
+                <button onclick="closeSettingsModal()"
+                    class="text-slate-500 hover:text-htb-green text-2xl transition-colors">✕</button>
+            </div>
+
+            <div class="space-y-6">
+                <!-- Info sobre localStorage -->
+                <div class="bg-htb-dark/50 border border-htb-green/20 rounded-lg p-4">
+                    <h4 class="text-sm font-bold text-htb-green mb-2 uppercase tracking-wider">ℹ️ Información</h4>
+                    <p class="text-xs text-slate-300 leading-relaxed">
+                        Esta es una aplicación web estática que funciona mediante <strong
+                            class="text-htb-green">localStorage</strong>.
+                        Todos tus datos se guardan localmente en tu navegador.
+                    </p>
+                    <p class="text-xs text-slate-400 mt-2 leading-relaxed">
+                        Puedes exportar e importar tus datos en formato JSON. Esto es útil si:
+                    </p>
+                    <ul class="text-xs text-slate-400 mt-2 ml-4 space-y-1">
+                        <li>• Tienes muchas máquinas y quieres hacer un respaldo</li>
+                        <li>• Cambias de navegador o dispositivo</li>
+                        <li>• Se borra el localStorage del navegador</li>
+                        <li>• Quieres compartir tus datos con otro equipo</li>
+                    </ul>
+                </div>
+
+                <!-- Estadísticas -->
+                <div class="bg-htb-dark/50 border border-htb-green/20 rounded-lg p-4">
+                    <h4 class="text-sm font-bold text-htb-green mb-3 uppercase tracking-wider">📊 Estadísticas</h4>
+                    <div class="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                            <span class="text-slate-400">Total de máquinas:</span>
+                            <span class="text-htb-green font-bold ml-2" id="stats-total">0</span>
+                        </div>
+                        <div>
+                            <span class="text-slate-400">Tamaño de datos:</span>
+                            <span class="text-htb-green font-bold ml-2" id="stats-size">0 KB</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Exportar -->
+                <div class="bg-htb-dark/50 border border-htb-green/20 rounded-lg p-4">
+                    <h4 class="text-sm font-bold text-htb-green mb-2 uppercase tracking-wider">📤 Exportar Datos</h4>
+                    <p class="text-xs text-slate-400 mb-3">Descarga todas tus máquinas en un archivo JSON</p>
+                    <button onclick="exportData()"
+                        class="w-full bg-htb-green/20 hover:bg-htb-green/30 border border-htb-green/50 text-htb-green font-bold py-2.5 px-4 rounded-lg transition-all uppercase text-sm">
+                        💾 Descargar Backup
+                    </button>
+                </div>
+
+                <!-- Importar -->
+                <div class="bg-htb-dark/50 border border-htb-green/20 rounded-lg p-4">
+                    <h4 class="text-sm font-bold text-htb-green mb-2 uppercase tracking-wider">📥 Importar Datos</h4>
+                    <p class="text-xs text-slate-400 mb-3">Carga un archivo JSON previamente exportado</p>
+                    <input type="file" id="import-file" accept=".json" class="hidden" onchange="importData(event)">
+                    <button onclick="document.getElementById('import-file').click()"
+                        class="w-full bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/50 text-blue-400 font-bold py-2.5 px-4 rounded-lg transition-all uppercase text-sm">
+                        📂 Seleccionar Archivo
+                    </button>
+                    <p class="text-[10px] text-yellow-500 mt-2">⚠️ Esto reemplazará todos tus datos actuales</p>
+                </div>
+
+                <!-- Borrar todo -->
+                <div class="bg-red-900/10 border border-red-600/30 rounded-lg p-4">
+                    <h4 class="text-sm font-bold text-red-500 mb-2 uppercase tracking-wider">🗑️ Zona Peligrosa</h4>
+                    <p class="text-xs text-slate-400 mb-3">Eliminar todas las máquinas permanentemente</p>
+                    <button onclick="deleteAllData()"
+                        class="w-full bg-red-600/20 hover:bg-red-600/30 border border-red-600/50 text-red-500 font-bold py-2.5 px-4 rounded-lg transition-all uppercase text-sm">
+                        ⚠️ Borrar Todo
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex gap-3 mt-8">
+                <button onclick="closeSettingsModal()"
+                    class="flex-1 bg-slate-700/50 hover:bg-slate-700 text-white font-bold py-3 rounded-lg transition-all uppercase">
+                    Cerrar
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
